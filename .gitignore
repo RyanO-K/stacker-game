@@ -1,0 +1,7 @@
+node_modules/
+dist/
+scores.json
+test-results/
+playwright-report/
+
+# bundle.js is intentionally committed — deployment must not require esbuild
