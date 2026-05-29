@@ -5,6 +5,7 @@ export default defineConfig({
   globalSetup: require.resolve('./playwright.global-setup'),
   timeout: 15_000,
   expect: { timeout: 3_000 },
+  reporter: [['html', { open: 'never' }], ['line']],
   use: {
     baseURL: 'http://localhost:3001',
     headless: true,
