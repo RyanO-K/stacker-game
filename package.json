@@ -1,0 +1,20 @@
+{
+  "name": "stacker-game",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build:browser": "esbuild src/ui/main.ts --bundle --outfile=public/bundle.js --platform=browser --target=es2020",
+    "build:server": "tsc --project tsconfig.server.json",
+    "build": "npm run build:browser && npm run build:server",
+    "start": "node dist/server/server.js",
+    "dev": "npm run build:browser && npm run build:server && npm run start",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.21.0",
+    "typescript": "^5.4.0"
+  }
+}

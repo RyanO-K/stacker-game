@@ -1,0 +1,55 @@
+{
+  "entries": [
+    {
+      "name": "HGH",
+      "score": 999,
+      "timestamp": 1780070273338
+    },
+    {
+      "name": "X10",
+      "score": 100,
+      "timestamp": 1780070273311
+    },
+    {
+      "name": "TST",
+      "score": 99,
+      "timestamp": 1780070273230
+    },
+    {
+      "name": "X9",
+      "score": 90,
+      "timestamp": 1780070273305
+    },
+    {
+      "name": "X8",
+      "score": 80,
+      "timestamp": 1780070273299
+    },
+    {
+      "name": "X7",
+      "score": 70,
+      "timestamp": 1780070273293
+    },
+    {
+      "name": "X6",
+      "score": 60,
+      "timestamp": 1780070273287
+    },
+    {
+      "name": "X5",
+      "score": 50,
+      "timestamp": 1780070273279
+    },
+    {
+      "name": "X4",
+      "score": 40,
+      "timestamp": 1780070273274
+    },
+    {
+      "name": "X3",
+      "score": 30,
+      "timestamp": 1780070273267
+    }
+  ],
+  "highScore": 999
+}

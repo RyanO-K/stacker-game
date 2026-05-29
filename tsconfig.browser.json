@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2020", "DOM"],
+    "noEmit": true
+  },
+  "include": ["src/ui/**/*", "src/game/**/*", "src/score/**/*", "src/npc/**/*", "src/shared/**/*"]
+}
