@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build:browser": "esbuild src/ui/main.ts --bundle --outfile=public/bundle.js --platform=browser --target=es2020",
+    "build:browser": "node build.js",
     "build:server": "tsc --project tsconfig.server.json",
     "build": "npm run build:browser && npm run build:server",
     "start": "node dist/server/server.js",
