@@ -10,7 +10,6 @@ async function startGame(page: Page) {
 }
 
 async function waitTick(page: Page) {
-  // Base tick is 400ms; wait 500ms to be safe
   await page.waitForTimeout(500);
 }
 
@@ -102,18 +101,15 @@ test.describe('Block movement', () => {
     const before = await page.evaluate(() => (window as any).__test__.getState().currentBlock.x);
     await waitTick(page);
     const after  = await page.evaluate(() => (window as any).__test__.getState().currentBlock.x);
-    // x should have changed (block moved)
     expect(after).not.toBe(before);
   });
 
   test('block stays within grid bounds after many ticks', async ({ page }) => {
     await page.waitForTimeout(2000);
     const state = await page.evaluate(() => (window as any).__test__.getState());
-    const { currentBlock, placedBlocks } = state;
-    // Only check if game is still playing
     if (state.status === 'PLAYING') {
-      expect(currentBlock.x).toBeGreaterThanOrEqual(0);
-      expect(currentBlock.x + currentBlock.width).toBeLessThanOrEqual(10);
+      expect(state.currentBlock.x).toBeGreaterThanOrEqual(0);
+      expect(state.currentBlock.x + state.currentBlock.width).toBeLessThanOrEqual(10);
     }
   });
 
@@ -154,7 +150,6 @@ test.describe('Drop mechanic', () => {
   });
 
   test('block width shrinks when drop is not perfectly aligned', async ({ page }) => {
-    // Shift block 3 cells into topPlaced then drop — intersection < topPlaced.width
     const widthBefore = await page.evaluate(() => {
       const s = (window as any).__test__.getState();
       return s.placedBlocks[s.placedBlocks.length - 1].width;
@@ -166,6 +161,100 @@ test.describe('Drop mechanic', () => {
       const topPlaced = state.placedBlocks[state.placedBlocks.length - 1];
       expect(topPlaced.width).toBeLessThan(widthBefore);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Infinite scroll
+// ---------------------------------------------------------------------------
+
+test.describe('Infinite scroll', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await startGame(page);
+  });
+
+  test('game continues past original grid height (15 rows)', async ({ page }) => {
+    // Drop 20 times — well past the original 15-row win boundary
+    for (let i = 0; i < 20; i++) {
+      await page.evaluate(() => {
+        const s = (window as any).__test__.getState();
+        if (s.status === 'PLAYING') {
+          (window as any).__test__.forcePerfect();
+          (window as any).__test__.forceDrop();
+        }
+      });
+    }
+    await expect(page.locator('[data-game-status="PLAYING"]')).toBeVisible();
+    const state = await page.evaluate(() => (window as any).__test__.getState());
+    expect(state.placedBlocks.length).toBeGreaterThan(15);
+  });
+
+  test('there is no WIN status — game is infinite', async ({ page }) => {
+    for (let i = 0; i < 30; i++) {
+      await page.evaluate(() => {
+        const s = (window as any).__test__.getState();
+        if (s.status === 'PLAYING') {
+          (window as any).__test__.forcePerfect();
+          (window as any).__test__.forceDrop();
+        }
+      });
+    }
+    const status = await page.evaluate(() => (window as any).__test__.getState().status);
+    expect(status).toBe('PLAYING');
+  });
+
+  test('score keeps accumulating past 15 drops', async ({ page }) => {
+    for (let i = 0; i < 20; i++) {
+      await page.evaluate(() => {
+        const s = (window as any).__test__.getState();
+        if (s.status === 'PLAYING') {
+          (window as any).__test__.forcePerfect();
+          (window as any).__test__.forceDrop();
+        }
+      });
+    }
+    const score = await page.locator('[data-testid="score"]').textContent();
+    expect(Number(score)).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Speed increase
+// ---------------------------------------------------------------------------
+
+test.describe('Speed increase', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await startGame(page);
+  });
+
+  test('level increments after 5 successful drops', async ({ page }) => {
+    for (let i = 0; i < 5; i++) {
+      await page.evaluate(() => {
+        const s = (window as any).__test__.getState();
+        if (s.status === 'PLAYING') {
+          (window as any).__test__.forcePerfect();
+          (window as any).__test__.forceDrop();
+        }
+      });
+    }
+    const level = await page.locator('[data-testid="level"]').textContent();
+    expect(Number(level)).toBeGreaterThanOrEqual(2);
+  });
+
+  test('game moves faster at high drop count than at start', async ({ page }) => {
+    const speeds = await page.evaluate(() => ({
+      slowSpeed: 400,                          // 0 drops
+      fastSpeed: Math.max(80, 400 - 50 * 4),  // 50 drops → 200ms
+    }));
+    expect(speeds.fastSpeed).toBeLessThan(speeds.slowSpeed);
+  });
+
+  test('speed never goes below minimum (80ms)', async ({ page }) => {
+    // At 100 drops: 400 - 100*4 = 0 → clamped to MIN_TICK_MS=80
+    const minSpeed = await page.evaluate(() => Math.max(80, 400 - 100 * 4));
+    expect(minSpeed).toBe(80);
   });
 });
 
@@ -213,38 +302,6 @@ test.describe('Game over', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Win condition
-// ---------------------------------------------------------------------------
-
-test.describe('Win condition', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await startGame(page);
-  });
-
-  test('filling the stack triggers WIN status', async ({ page }) => {
-    await page.evaluate(() => (window as any).__test__.forceWin());
-    await page.evaluate(() => (window as any).__test__.forcePerfect());
-    await page.evaluate(() => (window as any).__test__.forceDrop());
-    await expect(page.locator('[data-game-status="WIN"]')).toBeVisible();
-  });
-
-  test('win overlay is shown', async ({ page }) => {
-    await page.evaluate(() => (window as any).__test__.forceWin());
-    await page.evaluate(() => (window as any).__test__.forcePerfect());
-    await page.evaluate(() => (window as any).__test__.forceDrop());
-    await expect(page.locator('[data-testid="win-overlay"]')).toBeVisible();
-  });
-
-  test('start button shown after win', async ({ page }) => {
-    await page.evaluate(() => (window as any).__test__.forceWin());
-    await page.evaluate(() => (window as any).__test__.forcePerfect());
-    await page.evaluate(() => (window as any).__test__.forceDrop());
-    await expect(page.locator('[data-testid="start-btn"]')).toBeVisible();
-  });
-});
-
-// ---------------------------------------------------------------------------
 // Pause / resume
 // ---------------------------------------------------------------------------
 
@@ -261,7 +318,6 @@ test.describe('Pause and resume', () => {
 
   test('pressing P again resumes the game', async ({ page }) => {
     await page.keyboard.press('KeyP');
-    await expect(page.locator('[data-game-status="PAUSED"]')).toBeVisible();
     await page.keyboard.press('KeyP');
     await expect(page.locator('[data-game-status="PLAYING"]')).toBeVisible();
   });

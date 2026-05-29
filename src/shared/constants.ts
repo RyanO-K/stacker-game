@@ -6,7 +6,7 @@ export const CANVAS_HEIGHT = GRID.rows * GRID.cellSize;  // 480
 
 export const INITIAL_BLOCK_WIDTH = 7;
 export const BASE_TICK_MS        = 400;
-export const TICK_SPEED_STEP     = 25;   // ms faster per level above 1
+export const SPEED_PER_DROP      = 4;    // ms faster per successful drop
 export const MIN_TICK_MS         = 80;
 export const IDLE_TIMEOUT_MS     = 10_000;
 export const SERVER_PORT         = 3001;

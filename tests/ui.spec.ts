@@ -69,8 +69,8 @@ test.describe('HUD updates', () => {
   });
 
   test('level increments after enough successful drops', async ({ page }) => {
-    // 3 drops increases level (computeLevel: every 3 placements after platform)
-    for (let i = 0; i < 3; i++) {
+    // level increases every 5 drops
+    for (let i = 0; i < 5; i++) {
       await page.evaluate(() => {
         const s = (window as any).__test__.getState();
         if (s.status === 'PLAYING') {
@@ -95,12 +95,6 @@ test.describe('Overlay visibility', () => {
     await expect(page.locator('[data-testid="game-over-overlay"]')).toBeHidden();
   });
 
-  test('win overlay is hidden during play', async ({ page }) => {
-    await page.goto('/');
-    await startGame(page);
-    await expect(page.locator('[data-testid="win-overlay"]')).toBeHidden();
-  });
-
   test('game-over overlay has correct heading', async ({ page }) => {
     await page.goto('/');
     await startGame(page);
@@ -108,14 +102,6 @@ test.describe('Overlay visibility', () => {
     await expect(page.locator('#game-over-overlay h3')).toHaveText('GAME OVER');
   });
 
-  test('win overlay has correct heading', async ({ page }) => {
-    await page.goto('/');
-    await startGame(page);
-    await page.evaluate(() => (window as any).__test__.forceWin());
-    await page.evaluate(() => (window as any).__test__.forcePerfect());
-    await page.evaluate(() => (window as any).__test__.forceDrop());
-    await expect(page.locator('#win-overlay h3')).toHaveText('YOU WIN!');
-  });
 });
 
 // ---------------------------------------------------------------------------

@@ -3,19 +3,20 @@ import {
   GRID,
   INITIAL_BLOCK_WIDTH,
   BASE_TICK_MS,
-  TICK_SPEED_STEP,
+  SPEED_PER_DROP,
   MIN_TICK_MS,
   POINTS_PER_CELL,
   PERFECT_BONUS,
 } from '../shared/constants';
 
-export function computeTickInterval(level: number): number {
-  return Math.max(MIN_TICK_MS, BASE_TICK_MS - (level - 1) * TICK_SPEED_STEP);
+/** ms per move tick — decreases steadily with every successful drop. */
+export function computeTickInterval(dropCount: number): number {
+  return Math.max(MIN_TICK_MS, BASE_TICK_MS - dropCount * SPEED_PER_DROP);
 }
 
-export function computeLevel(placedCount: number): number {
-  // Level increases every 3 successful placements (after the initial platform)
-  return Math.floor((placedCount - 1) / 3) + 1;
+/** Display level: increments every 5 drops. */
+export function computeLevel(dropCount: number): number {
+  return Math.floor(dropCount / 5) + 1;
 }
 
 /** Returns the overlap of two blocks, or null if they don't overlap. */
@@ -26,13 +27,12 @@ export function intersectBlocks(a: Block, b: Block): Block | null {
   return { x: left, width: right - left };
 }
 
-/** Returns true when a and b are identical (same x and width). */
 export function isPerfectMatch(a: Block, b: Block): boolean {
   return a.x === b.x && a.width === b.width;
 }
 
 export function createInitialState(grid: GridConfig = GRID): GameState {
-  const platform: Block = { x: 0, width: grid.cols };
+  const platform: Block    = { x: 0, width: grid.cols };
   const currentBlock: Block = {
     x: Math.floor((grid.cols - INITIAL_BLOCK_WIDTH) / 2),
     width: INITIAL_BLOCK_WIDTH,
@@ -56,15 +56,13 @@ export function moveTick(state: GameState): GameState {
   const { currentBlock, direction } = state;
   const cols = GRID.cols;
 
-  let newX = currentBlock.x + (direction === 'RIGHT' ? 1 : -1);
+  let newX  = currentBlock.x + (direction === 'RIGHT' ? 1 : -1);
   let newDir = direction;
 
   if (newX < 0) {
-    newX = 0;
-    newDir = 'RIGHT';
+    newX = 0; newDir = 'RIGHT';
   } else if (newX + currentBlock.width > cols) {
-    newX = cols - currentBlock.width;
-    newDir = 'LEFT';
+    newX = cols - currentBlock.width; newDir = 'LEFT';
   }
 
   return {
@@ -75,38 +73,24 @@ export function moveTick(state: GameState): GameState {
   };
 }
 
-/** Drop the current block onto the stack. Returns updated game state. */
+/** Drop the current block onto the stack. Game is infinite — no win condition. */
 export function dropBlock(state: GameState): GameState {
   if (state.status !== 'PLAYING' && state.status !== 'NPC_DEMO') return state;
 
-  const topPlaced = state.placedBlocks[state.placedBlocks.length - 1];
+  const topPlaced    = state.placedBlocks[state.placedBlocks.length - 1];
   const intersection = intersectBlocks(state.currentBlock, topPlaced);
 
   if (!intersection) {
     return { ...state, status: 'GAME_OVER', tickCount: state.tickCount + 1 };
   }
 
-  const perfect = isPerfectMatch(intersection, topPlaced) && isPerfectMatch(intersection, state.currentBlock);
-  const points  = intersection.width * POINTS_PER_CELL + (perfect ? PERFECT_BONUS : 0);
-  const newPlaced = [...state.placedBlocks, intersection];
-  const newLevel  = computeLevel(newPlaced.length);
-
-  // Win: stack has filled all rows
-  if (newPlaced.length >= GRID.rows) {
-    return {
-      ...state,
-      placedBlocks: newPlaced,
-      score: state.score + points,
-      status: state.status === 'NPC_DEMO' ? 'NPC_DEMO' : 'WIN',
-      level: newLevel,
-      lastDropPerfect: perfect,
-      tickCount: state.tickCount + 1,
-    };
-  }
-
-  // Next block starts at the intersection position, alternating start direction
+  const perfect    = isPerfectMatch(intersection, topPlaced) && isPerfectMatch(intersection, state.currentBlock);
+  const points     = intersection.width * POINTS_PER_CELL + (perfect ? PERFECT_BONUS : 0);
+  const newPlaced  = [...state.placedBlocks, intersection];
+  const dropCount  = newPlaced.length - 1; // exclude platform
+  const newLevel   = computeLevel(dropCount);
   const nextBlock: Block = { x: intersection.x, width: intersection.width };
-  const nextDir  = state.direction === 'RIGHT' ? 'LEFT' : 'RIGHT';
+  const nextDir    = state.direction === 'RIGHT' ? 'LEFT' : 'RIGHT';
 
   return {
     ...state,

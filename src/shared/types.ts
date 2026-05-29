@@ -1,4 +1,4 @@
-export type GameStatus = 'IDLE' | 'PLAYING' | 'PAUSED' | 'GAME_OVER' | 'WIN' | 'NPC_DEMO';
+export type GameStatus = 'IDLE' | 'PLAYING' | 'PAUSED' | 'GAME_OVER' | 'NPC_DEMO';
 
 export interface Block {
   x: number;     // leftmost column (0-based)

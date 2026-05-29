@@ -26,7 +26,7 @@ let state = createInitialState(GRID);
 // ── Timers ────────────────────────────────────────────────────────────────────
 let tickTimer: number | null = null;
 let idleTimer: number | null = null;
-let currentTickInterval      = computeTickInterval(1);
+let currentTickInterval      = computeTickInterval(0);
 
 // ── NPC ───────────────────────────────────────────────────────────────────────
 const npc = new NpcController();
@@ -48,6 +48,10 @@ function updateScoreDom(board: ScoreBoard): void {
   }
 }
 
+function dropCount(): number {
+  return state.placedBlocks.length - 1;
+}
+
 function updateDom(): void {
   const container = document.getElementById('game-container')!;
   container.setAttribute('data-game-status', state.status);
@@ -60,25 +64,18 @@ function updateDom(): void {
 
   const startBtn = document.getElementById('start-btn') as HTMLButtonElement | null;
   if (startBtn) {
-    startBtn.hidden = !(
-      state.status === 'IDLE' ||
-      state.status === 'GAME_OVER' ||
-      state.status === 'WIN'
-    );
+    startBtn.hidden = !(state.status === 'IDLE' || state.status === 'GAME_OVER');
   }
 
   const overlay = document.getElementById('game-over-overlay') as HTMLElement | null;
   if (overlay) overlay.hidden = state.status !== 'GAME_OVER';
-
-  const winOverlay = document.getElementById('win-overlay') as HTMLElement | null;
-  if (winOverlay) winOverlay.hidden = state.status !== 'WIN';
 }
 
 // ── Game loop ─────────────────────────────────────────────────────────────────
 function startGameLoop(): void {
   if (tickTimer !== null) { clearInterval(tickTimer); tickTimer = null; }
 
-  currentTickInterval = computeTickInterval(state.level);
+  currentTickInterval = computeTickInterval(dropCount());
 
   tickTimer = window.setInterval(() => {
     if (state.status === 'NPC_DEMO' && npc.shouldDrop(state)) {
@@ -96,14 +93,8 @@ function startGameLoop(): void {
       return;
     }
 
-    if (state.status === 'WIN') {
-      if (tickTimer !== null) { clearInterval(tickTimer); tickTimer = null; }
-      onWin();
-      return;
-    }
-
-    // Restart loop if level changed (speed update)
-    const newInterval = computeTickInterval(state.level);
+    // Restart loop when speed changes after a drop
+    const newInterval = computeTickInterval(dropCount());
     if (newInterval !== currentTickInterval) {
       startGameLoop();
     }
@@ -124,7 +115,7 @@ function startIdleTimeout(): void {
   idleTimer = window.setTimeout(() => startNpcDemo(), IDLE_TIMEOUT_MS);
 }
 
-// ── End-of-game handlers ──────────────────────────────────────────────────────
+// ── Game over handler ─────────────────────────────────────────────────────────
 function onGameOver(): void {
   render(ctx, state, scoreManager.getHighScore());
   updateDom();
@@ -134,25 +125,11 @@ function onGameOver(): void {
   if (initialsInput) initialsInput.focus();
 }
 
-function onWin(): void {
-  render(ctx, state, scoreManager.getHighScore());
-  updateDom();
-  const winScoreEl = document.getElementById('win-score');
-  if (winScoreEl) winScoreEl.textContent = String(state.score);
-  const initialsInput = document.getElementById('win-initials-input') as HTMLInputElement | null;
-  if (initialsInput) initialsInput.focus();
-}
-
 // ── Dispatcher ────────────────────────────────────────────────────────────────
 function dispatch(event: GameEvent): void {
   switch (event.type) {
     case 'START_GAME':
-      if (
-        state.status === 'IDLE' ||
-        state.status === 'GAME_OVER' ||
-        state.status === 'WIN' ||
-        state.status === 'NPC_DEMO'
-      ) {
+      if (state.status === 'IDLE' || state.status === 'GAME_OVER' || state.status === 'NPC_DEMO') {
         if (idleTimer !== null) { clearTimeout(idleTimer); idleTimer = null; }
         npc.reset();
         state = { ...createInitialState(GRID), status: 'PLAYING' };
@@ -196,12 +173,8 @@ function dispatch(event: GameEvent): void {
         if (state.status === 'GAME_OVER') {
           if (tickTimer !== null) { clearInterval(tickTimer); tickTimer = null; }
           onGameOver();
-        } else if (state.status === 'WIN') {
-          if (tickTimer !== null) { clearInterval(tickTimer); tickTimer = null; }
-          onWin();
         } else {
-          // Restart loop if level changed
-          const newInterval = computeTickInterval(state.level);
+          const newInterval = computeTickInterval(dropCount());
           if (newInterval !== currentTickInterval) {
             startGameLoop();
           }
@@ -238,17 +211,13 @@ document.getElementById('start-btn')?.addEventListener('click', () => {
   dispatch({ type: 'START_GAME' });
 });
 
-function wireSubmitBtn(btnId: string, inputId: string): void {
-  document.getElementById(btnId)?.addEventListener('click', () => {
-    const input = document.getElementById(inputId) as HTMLInputElement | null;
-    const name  = (input?.value ?? 'AAA').slice(0, 3).toUpperCase() || 'AAA';
-    if (input) input.value = '';
-    dispatch({ type: 'SUBMIT_SCORE', name });
-  });
-}
-
-wireSubmitBtn('submit-score-btn', 'initials-input');
-wireSubmitBtn('win-submit-btn',   'win-initials-input');
+document.getElementById('submit-score-btn')?.addEventListener('click', () => {
+  const input = document.getElementById('initials-input') as HTMLInputElement | null;
+  const name  = (input?.value ?? 'AAA').slice(0, 3).toUpperCase() || 'AAA';
+  if (input) input.value = '';
+  dispatch({ type: 'SUBMIT_SCORE', name });
+  startIdleTimeout();
+});
 
 render(ctx, state, scoreManager.getHighScore());
 updateDom();
@@ -256,21 +225,14 @@ startIdleTimeout();
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 (window as any).__test__ = {
-  forceMiss() {
-    // Move current block completely outside top placed block — next drop = GAME_OVER
-    const topPlaced = state.placedBlocks[state.placedBlocks.length - 1];
-    const missX = topPlaced.x + topPlaced.width + 1; // guaranteed no overlap
-    state = {
-      ...state,
-      currentBlock: { ...state.currentBlock, x: Math.min(missX, GRID.cols - state.currentBlock.width) },
-    };
-    // Force a complete miss by placing it fully outside
-    state = { ...state, currentBlock: { x: 0, width: 0 } };
-  },
   forcePerfect() {
-    // Align current block exactly to top placed block
     const topPlaced = state.placedBlocks[state.placedBlocks.length - 1];
     state = { ...state, currentBlock: { x: topPlaced.x, width: topPlaced.width } };
+  },
+  forcePartialOverlap() {
+    const topPlaced = state.placedBlocks[state.placedBlocks.length - 1];
+    const newX = Math.min(topPlaced.x + 3, GRID.cols - state.currentBlock.width);
+    state = { ...state, currentBlock: { ...state.currentBlock, x: newX } };
   },
   forceDrop() {
     if (tickTimer !== null) { clearInterval(tickTimer); tickTimer = null; }
@@ -279,8 +241,6 @@ startIdleTimeout();
     updateDom();
     if (state.status === 'GAME_OVER') {
       onGameOver();
-    } else if (state.status === 'WIN') {
-      onWin();
     } else {
       startGameLoop();
     }
@@ -291,24 +251,6 @@ startIdleTimeout();
     render(ctx, state, scoreManager.getHighScore());
     updateDom();
     onGameOver();
-  },
-  forcePartialOverlap() {
-    // Shift current block 3 cells into topPlaced from the right, guaranteeing partial overlap
-    const topPlaced = state.placedBlocks[state.placedBlocks.length - 1];
-    const newX = Math.min(topPlaced.x + 3, GRID.cols - state.currentBlock.width);
-    state = { ...state, currentBlock: { ...state.currentBlock, x: newX } };
-  },
-  forceWin() {
-    // Fill placedBlocks to trigger WIN on next drop
-    const { cols, rows } = GRID;
-    const fakeBlocks = Array.from({ length: rows - 1 }, (_, i) => ({
-      x: 0, width: Math.max(1, cols - i),
-    }));
-    state = {
-      ...state,
-      placedBlocks: fakeBlocks,
-      currentBlock: { x: fakeBlocks[fakeBlocks.length - 1].x, width: fakeBlocks[fakeBlocks.length - 1].width },
-    };
   },
   getState() { return state; },
 };

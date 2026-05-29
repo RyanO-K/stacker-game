@@ -13,36 +13,41 @@ function lerpColor(a: string, b: string, t: number): string {
   return `rgb(${Math.round(ar + (br - ar) * t)},${Math.round(ag + (bg - ag) * t)},${Math.round(ab + (bb - ab) * t)})`;
 }
 
-function rowToY(row: number): number {
-  return (GRID.rows - 1 - row) * GRID.cellSize;
+/**
+ * Camera offset in rows. Keeps the active row near the top of the canvas
+ * so the stack scrolls as it grows taller than the viewport.
+ */
+function computeViewOffset(state: GameState): number {
+  const currentRow = state.placedBlocks.length;
+  return Math.max(0, currentRow - (GRID.rows - 3));
+}
+
+/** Convert a logical row index to a canvas Y coordinate, accounting for scroll. */
+function rowToY(row: number, viewOffset: number): number {
+  return (GRID.rows - 1 - (row - viewOffset)) * GRID.cellSize;
 }
 
 function drawBlock(
   ctx: CanvasRenderingContext2D,
   block: Block,
   row: number,
+  viewOffset: number,
   color: string,
   glowColor?: string,
 ): void {
   const x = block.x * GRID.cellSize + 1;
-  const y = rowToY(row) + 1;
+  const y = rowToY(row, viewOffset) + 1;
   const w = block.width * GRID.cellSize - 2;
   const h = GRID.cellSize - 2;
-  const r = 3;
 
-  if (glowColor) {
-    ctx.shadowColor = glowColor;
-    ctx.shadowBlur  = 14;
-  }
+  if (glowColor) { ctx.shadowColor = glowColor; ctx.shadowBlur = 14; }
 
   ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.roundRect(x, y, w, h, r);
+  ctx.roundRect(x, y, w, h, 3);
   ctx.fill();
 
   ctx.shadowBlur = 0;
-
-  // Subtle top highlight
   ctx.fillStyle = 'rgba(255,255,255,0.12)';
   ctx.fillRect(x + 2, y + 2, w - 4, 4);
 }
@@ -53,6 +58,7 @@ export function render(
   highScore: number,
 ): void {
   const { cellSize, cols, rows } = GRID;
+  const viewOffset = computeViewOffset(state);
 
   // Background
   ctx.fillStyle = COLORS.background;
@@ -70,32 +76,36 @@ export function render(
   }
   ctx.globalAlpha = 1;
 
-  // Placed blocks (color gradient from bottom=dark to top=bright)
+  // Placed blocks — only those visible in the current viewport
   const totalPlaced = state.placedBlocks.length;
-  for (let i = 0; i < totalPlaced; i++) {
+  const firstVisible = viewOffset;
+  const lastVisible  = viewOffset + rows - 1;
+
+  for (let i = firstVisible; i < totalPlaced && i <= lastVisible; i++) {
     const t   = totalPlaced > 1 ? i / (totalPlaced - 1) : 0;
     const col = i === 0
       ? COLORS.platform
       : lerpColor(COLORS.blockBottom, COLORS.blockTop, t);
-    drawBlock(ctx, state.placedBlocks[i], i, col);
+    drawBlock(ctx, state.placedBlocks[i], i, viewOffset, col);
   }
 
-  // Ghost outline showing perfect-alignment target on current row
+  // Active / NPC moving block + ghost outline
   if (state.status === 'PLAYING' || state.status === 'NPC_DEMO') {
-    const currentRow = state.placedBlocks.length;
+    const currentRow = totalPlaced;
     const topPlaced  = state.placedBlocks[totalPlaced - 1];
+
+    // Ghost outline showing perfect-alignment target
     ctx.strokeStyle = 'rgba(255,255,255,0.1)';
     ctx.lineWidth = 1;
     ctx.strokeRect(
       topPlaced.x * cellSize + 1,
-      rowToY(currentRow) + 1,
+      rowToY(currentRow, viewOffset) + 1,
       topPlaced.width * cellSize - 2,
       cellSize - 2,
     );
 
-    // Moving block
     const activeColor = state.status === 'NPC_DEMO' ? COLORS.npcBlock : COLORS.blockActive;
-    drawBlock(ctx, state.currentBlock, currentRow, activeColor, activeColor);
+    drawBlock(ctx, state.currentBlock, currentRow, viewOffset, activeColor, activeColor);
   }
 
   // IDLE overlay
@@ -123,19 +133,6 @@ export function render(
     ctx.fillText('SPACE to resume', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 24);
   }
 
-  // WIN overlay
-  if (state.status === 'WIN') {
-    ctx.fillStyle = COLORS.overlay;
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = COLORS.blockPerfect;
-    ctx.font = 'bold 28px "Courier New", monospace';
-    ctx.fillText('YOU WIN!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 16);
-    ctx.fillStyle = COLORS.text;
-    ctx.font = '14px "Courier New", monospace';
-    ctx.fillText(`Score: ${state.score}`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 14);
-  }
-
   // NPC demo tag
   if (state.status === 'NPC_DEMO') {
     ctx.fillStyle = 'rgba(0,180,216,0.4)';
@@ -145,5 +142,5 @@ export function render(
   }
 
   ctx.shadowBlur = 0;
-  void highScore; // used by caller for HUD, not drawn on canvas
+  void highScore;
 }

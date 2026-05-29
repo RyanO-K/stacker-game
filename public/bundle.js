@@ -6,7 +6,7 @@
   var CANVAS_HEIGHT = GRID.rows * GRID.cellSize;
   var INITIAL_BLOCK_WIDTH = 7;
   var BASE_TICK_MS = 400;
-  var TICK_SPEED_STEP = 25;
+  var SPEED_PER_DROP = 4;
   var MIN_TICK_MS = 80;
   var IDLE_TIMEOUT_MS = 1e4;
   var MAX_HIGH_SCORES = 10;
@@ -26,11 +26,11 @@
   };
 
   // src/game/core.ts
-  function computeTickInterval(level) {
-    return Math.max(MIN_TICK_MS, BASE_TICK_MS - (level - 1) * TICK_SPEED_STEP);
+  function computeTickInterval(dropCount2) {
+    return Math.max(MIN_TICK_MS, BASE_TICK_MS - dropCount2 * SPEED_PER_DROP);
   }
-  function computeLevel(placedCount) {
-    return Math.floor((placedCount - 1) / 3) + 1;
+  function computeLevel(dropCount2) {
+    return Math.floor(dropCount2 / 5) + 1;
   }
   function intersectBlocks(a, b) {
     const left = Math.max(a.x, b.x);
@@ -88,18 +88,8 @@
     const perfect = isPerfectMatch(intersection, topPlaced) && isPerfectMatch(intersection, state2.currentBlock);
     const points = intersection.width * POINTS_PER_CELL + (perfect ? PERFECT_BONUS : 0);
     const newPlaced = [...state2.placedBlocks, intersection];
-    const newLevel = computeLevel(newPlaced.length);
-    if (newPlaced.length >= GRID.rows) {
-      return {
-        ...state2,
-        placedBlocks: newPlaced,
-        score: state2.score + points,
-        status: state2.status === "NPC_DEMO" ? "NPC_DEMO" : "WIN",
-        level: newLevel,
-        lastDropPerfect: perfect,
-        tickCount: state2.tickCount + 1
-      };
-    }
+    const dropCount2 = newPlaced.length - 1;
+    const newLevel = computeLevel(dropCount2);
     const nextBlock = { x: intersection.x, width: intersection.width };
     const nextDir = state2.direction === "RIGHT" ? "LEFT" : "RIGHT";
     return {
@@ -125,22 +115,25 @@
     const [br, bg, bb] = parse(b);
     return `rgb(${Math.round(ar + (br - ar) * t)},${Math.round(ag + (bg - ag) * t)},${Math.round(ab + (bb - ab) * t)})`;
   }
-  function rowToY(row) {
-    return (GRID.rows - 1 - row) * GRID.cellSize;
+  function computeViewOffset(state2) {
+    const currentRow = state2.placedBlocks.length;
+    return Math.max(0, currentRow - (GRID.rows - 3));
   }
-  function drawBlock(ctx2, block, row, color, glowColor) {
+  function rowToY(row, viewOffset) {
+    return (GRID.rows - 1 - (row - viewOffset)) * GRID.cellSize;
+  }
+  function drawBlock(ctx2, block, row, viewOffset, color, glowColor) {
     const x = block.x * GRID.cellSize + 1;
-    const y = rowToY(row) + 1;
+    const y = rowToY(row, viewOffset) + 1;
     const w = block.width * GRID.cellSize - 2;
     const h = GRID.cellSize - 2;
-    const r = 3;
     if (glowColor) {
       ctx2.shadowColor = glowColor;
       ctx2.shadowBlur = 14;
     }
     ctx2.fillStyle = color;
     ctx2.beginPath();
-    ctx2.roundRect(x, y, w, h, r);
+    ctx2.roundRect(x, y, w, h, 3);
     ctx2.fill();
     ctx2.shadowBlur = 0;
     ctx2.fillStyle = "rgba(255,255,255,0.12)";
@@ -148,6 +141,7 @@
   }
   function render(ctx2, state2, highScore) {
     const { cellSize, cols, rows } = GRID;
+    const viewOffset = computeViewOffset(state2);
     ctx2.fillStyle = COLORS.background;
     ctx2.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     ctx2.strokeStyle = COLORS.grid;
@@ -167,24 +161,26 @@
     }
     ctx2.globalAlpha = 1;
     const totalPlaced = state2.placedBlocks.length;
-    for (let i = 0; i < totalPlaced; i++) {
+    const firstVisible = viewOffset;
+    const lastVisible = viewOffset + rows - 1;
+    for (let i = firstVisible; i < totalPlaced && i <= lastVisible; i++) {
       const t = totalPlaced > 1 ? i / (totalPlaced - 1) : 0;
       const col = i === 0 ? COLORS.platform : lerpColor(COLORS.blockBottom, COLORS.blockTop, t);
-      drawBlock(ctx2, state2.placedBlocks[i], i, col);
+      drawBlock(ctx2, state2.placedBlocks[i], i, viewOffset, col);
     }
     if (state2.status === "PLAYING" || state2.status === "NPC_DEMO") {
-      const currentRow = state2.placedBlocks.length;
+      const currentRow = totalPlaced;
       const topPlaced = state2.placedBlocks[totalPlaced - 1];
       ctx2.strokeStyle = "rgba(255,255,255,0.1)";
       ctx2.lineWidth = 1;
       ctx2.strokeRect(
         topPlaced.x * cellSize + 1,
-        rowToY(currentRow) + 1,
+        rowToY(currentRow, viewOffset) + 1,
         topPlaced.width * cellSize - 2,
         cellSize - 2
       );
       const activeColor = state2.status === "NPC_DEMO" ? COLORS.npcBlock : COLORS.blockActive;
-      drawBlock(ctx2, state2.currentBlock, currentRow, activeColor, activeColor);
+      drawBlock(ctx2, state2.currentBlock, currentRow, viewOffset, activeColor, activeColor);
     }
     if (state2.status === "IDLE") {
       ctx2.fillStyle = COLORS.overlay;
@@ -206,17 +202,6 @@
       ctx2.fillText("PAUSED", CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
       ctx2.font = '12px "Courier New", monospace';
       ctx2.fillText("SPACE to resume", CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 24);
-    }
-    if (state2.status === "WIN") {
-      ctx2.fillStyle = COLORS.overlay;
-      ctx2.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-      ctx2.textAlign = "center";
-      ctx2.fillStyle = COLORS.blockPerfect;
-      ctx2.font = 'bold 28px "Courier New", monospace';
-      ctx2.fillText("YOU WIN!", CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 16);
-      ctx2.fillStyle = COLORS.text;
-      ctx2.font = '14px "Courier New", monospace';
-      ctx2.fillText(`Score: ${state2.score}`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 14);
     }
     if (state2.status === "NPC_DEMO") {
       ctx2.fillStyle = "rgba(0,180,216,0.4)";
@@ -359,7 +344,7 @@
   var state = createInitialState(GRID);
   var tickTimer = null;
   var idleTimer = null;
-  var currentTickInterval = computeTickInterval(1);
+  var currentTickInterval = computeTickInterval(0);
   var npc = new NpcController();
   function updateScoreDom(board) {
     const list = document.getElementById("score-list");
@@ -376,6 +361,9 @@
       list.appendChild(li);
     }
   }
+  function dropCount() {
+    return state.placedBlocks.length - 1;
+  }
   function updateDom() {
     const container = document.getElementById("game-container");
     container.setAttribute("data-game-status", state.status);
@@ -385,19 +373,17 @@
     if (levelEl) levelEl.textContent = String(state.level);
     const startBtn = document.getElementById("start-btn");
     if (startBtn) {
-      startBtn.hidden = !(state.status === "IDLE" || state.status === "GAME_OVER" || state.status === "WIN");
+      startBtn.hidden = !(state.status === "IDLE" || state.status === "GAME_OVER");
     }
     const overlay = document.getElementById("game-over-overlay");
     if (overlay) overlay.hidden = state.status !== "GAME_OVER";
-    const winOverlay = document.getElementById("win-overlay");
-    if (winOverlay) winOverlay.hidden = state.status !== "WIN";
   }
   function startGameLoop() {
     if (tickTimer !== null) {
       clearInterval(tickTimer);
       tickTimer = null;
     }
-    currentTickInterval = computeTickInterval(state.level);
+    currentTickInterval = computeTickInterval(dropCount());
     tickTimer = window.setInterval(() => {
       if (state.status === "NPC_DEMO" && npc.shouldDrop(state)) {
         state = dropBlock(state);
@@ -414,15 +400,7 @@
         onGameOver();
         return;
       }
-      if (state.status === "WIN") {
-        if (tickTimer !== null) {
-          clearInterval(tickTimer);
-          tickTimer = null;
-        }
-        onWin();
-        return;
-      }
-      const newInterval = computeTickInterval(state.level);
+      const newInterval = computeTickInterval(dropCount());
       if (newInterval !== currentTickInterval) {
         startGameLoop();
       }
@@ -449,18 +427,10 @@
     const initialsInput = document.getElementById("initials-input");
     if (initialsInput) initialsInput.focus();
   }
-  function onWin() {
-    render(ctx, state, scoreManager.getHighScore());
-    updateDom();
-    const winScoreEl = document.getElementById("win-score");
-    if (winScoreEl) winScoreEl.textContent = String(state.score);
-    const initialsInput = document.getElementById("win-initials-input");
-    if (initialsInput) initialsInput.focus();
-  }
   function dispatch(event) {
     switch (event.type) {
       case "START_GAME":
-        if (state.status === "IDLE" || state.status === "GAME_OVER" || state.status === "WIN" || state.status === "NPC_DEMO") {
+        if (state.status === "IDLE" || state.status === "GAME_OVER" || state.status === "NPC_DEMO") {
           if (idleTimer !== null) {
             clearTimeout(idleTimer);
             idleTimer = null;
@@ -515,14 +485,8 @@
               tickTimer = null;
             }
             onGameOver();
-          } else if (state.status === "WIN") {
-            if (tickTimer !== null) {
-              clearInterval(tickTimer);
-              tickTimer = null;
-            }
-            onWin();
           } else {
-            const newInterval = computeTickInterval(state.level);
+            const newInterval = computeTickInterval(dropCount());
             if (newInterval !== currentTickInterval) {
               startGameLoop();
             }
@@ -551,32 +515,25 @@
   document.getElementById("start-btn")?.addEventListener("click", () => {
     dispatch({ type: "START_GAME" });
   });
-  function wireSubmitBtn(btnId, inputId) {
-    document.getElementById(btnId)?.addEventListener("click", () => {
-      const input = document.getElementById(inputId);
-      const name = (input?.value ?? "AAA").slice(0, 3).toUpperCase() || "AAA";
-      if (input) input.value = "";
-      dispatch({ type: "SUBMIT_SCORE", name });
-    });
-  }
-  wireSubmitBtn("submit-score-btn", "initials-input");
-  wireSubmitBtn("win-submit-btn", "win-initials-input");
+  document.getElementById("submit-score-btn")?.addEventListener("click", () => {
+    const input = document.getElementById("initials-input");
+    const name = (input?.value ?? "AAA").slice(0, 3).toUpperCase() || "AAA";
+    if (input) input.value = "";
+    dispatch({ type: "SUBMIT_SCORE", name });
+    startIdleTimeout();
+  });
   render(ctx, state, scoreManager.getHighScore());
   updateDom();
   startIdleTimeout();
   window.__test__ = {
-    forceMiss() {
-      const topPlaced = state.placedBlocks[state.placedBlocks.length - 1];
-      const missX = topPlaced.x + topPlaced.width + 1;
-      state = {
-        ...state,
-        currentBlock: { ...state.currentBlock, x: Math.min(missX, GRID.cols - state.currentBlock.width) }
-      };
-      state = { ...state, currentBlock: { x: 0, width: 0 } };
-    },
     forcePerfect() {
       const topPlaced = state.placedBlocks[state.placedBlocks.length - 1];
       state = { ...state, currentBlock: { x: topPlaced.x, width: topPlaced.width } };
+    },
+    forcePartialOverlap() {
+      const topPlaced = state.placedBlocks[state.placedBlocks.length - 1];
+      const newX = Math.min(topPlaced.x + 3, GRID.cols - state.currentBlock.width);
+      state = { ...state, currentBlock: { ...state.currentBlock, x: newX } };
     },
     forceDrop() {
       if (tickTimer !== null) {
@@ -588,8 +545,6 @@
       updateDom();
       if (state.status === "GAME_OVER") {
         onGameOver();
-      } else if (state.status === "WIN") {
-        onWin();
       } else {
         startGameLoop();
       }
@@ -603,23 +558,6 @@
       render(ctx, state, scoreManager.getHighScore());
       updateDom();
       onGameOver();
-    },
-    forcePartialOverlap() {
-      const topPlaced = state.placedBlocks[state.placedBlocks.length - 1];
-      const newX = Math.min(topPlaced.x + 3, GRID.cols - state.currentBlock.width);
-      state = { ...state, currentBlock: { ...state.currentBlock, x: newX } };
-    },
-    forceWin() {
-      const { cols, rows } = GRID;
-      const fakeBlocks = Array.from({ length: rows - 1 }, (_, i) => ({
-        x: 0,
-        width: Math.max(1, cols - i)
-      }));
-      state = {
-        ...state,
-        placedBlocks: fakeBlocks,
-        currentBlock: { x: fakeBlocks[fakeBlocks.length - 1].x, width: fakeBlocks[fakeBlocks.length - 1].width }
-      };
     },
     getState() {
       return state;

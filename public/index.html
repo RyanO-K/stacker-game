@@ -16,7 +16,6 @@
       <canvas id="game-canvas" data-testid="game-canvas"></canvas>
       <button data-testid="start-btn" id="start-btn">PLAY</button>
 
-      <!-- Game-over overlay -->
       <div id="game-over-overlay" data-testid="game-over-overlay" hidden>
         <h3>GAME OVER</h3>
         <p>Score: <span data-testid="final-score" id="final-score">0</span></p>
@@ -29,21 +28,6 @@
           autocomplete="off"
         />
         <button data-testid="submit-score-btn" id="submit-score-btn">Submit</button>
-      </div>
-
-      <!-- Win overlay -->
-      <div id="win-overlay" data-testid="win-overlay" hidden>
-        <h3>YOU WIN!</h3>
-        <p>Score: <span data-testid="win-score" id="win-score">0</span></p>
-        <input
-          type="text"
-          data-testid="win-initials-input"
-          id="win-initials-input"
-          maxlength="3"
-          placeholder="AAA"
-          autocomplete="off"
-        />
-        <button data-testid="win-submit-btn" id="win-submit-btn">Submit</button>
       </div>
     </div>
 
