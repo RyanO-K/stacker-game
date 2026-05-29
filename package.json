@@ -11,10 +11,12 @@
     "test": "playwright test",
     "test:ui": "playwright test --ui"
   },
-  "devDependencies": {
-    "@playwright/test": "^1.60.0",
-    "@types/node": "^20.0.0",
+  "dependencies": {
     "esbuild": "^0.21.0",
     "typescript": "^5.4.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@types/node": "^20.0.0"
   }
 }
