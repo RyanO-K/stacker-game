@@ -266,7 +266,7 @@
     }
     async load() {
       try {
-        const res = await fetch("/api/scores");
+        const res = await fetch("./api/scores");
         const data = await res.json();
         this.board = data;
         localStorage.setItem(LS_KEY, JSON.stringify(this.board));
@@ -283,7 +283,7 @@
     }
     async submit(entry) {
       try {
-        const res = await fetch("/api/scores", {
+        const res = await fetch("./api/scores", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(entry)

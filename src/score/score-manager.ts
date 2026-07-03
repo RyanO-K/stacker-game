@@ -8,7 +8,7 @@ export class ScoreManager {
 
   async load(): Promise<ScoreBoard> {
     try {
-      const res  = await fetch('/api/scores');
+      const res  = await fetch('./api/scores');
       const data = await res.json() as ScoreBoard;
       this.board = data;
       localStorage.setItem(LS_KEY, JSON.stringify(this.board));
@@ -26,7 +26,7 @@ export class ScoreManager {
 
   async submit(entry: ScoreEntry): Promise<ScoreBoard> {
     try {
-      const res  = await fetch('/api/scores', {
+      const res  = await fetch('./api/scores', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(entry),

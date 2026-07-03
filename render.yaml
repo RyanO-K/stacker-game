@@ -1,0 +1,23 @@
+# Render Blueprint for stacker-game (migrated off Railway).
+# Create via Render dashboard → "New +" → "Blueprint" and point it at this repo,
+# or configure a Web Service manually with the build/start commands below.
+#
+# BUILD NOTE: Render builds under NODE_ENV=production. The build-time tools
+# (esbuild, typescript, @types/node) therefore live in `dependencies`, NOT
+# `devDependencies` — a production-only `npm install` skips devDependencies and
+# would break `npm run build` (esbuild not found / "Cannot find name ..." from
+# tsc). This mirrors the same fix applied to snake-game.
+#
+# PERSISTENCE NOTE: high scores live in scores.json on the local filesystem.
+# Render's filesystem is EPHEMERAL, so scores reset on every deploy/restart.
+# This is accepted by design (scores are disposable) — no disk / external store.
+#
+# PORT: Render sets $PORT automatically; src/server/server.ts listens on it.
+services:
+  - type: web
+    name: stacker-game
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /
