@@ -78,6 +78,11 @@
       tickCount: state2.tickCount + 1
     };
   }
+  function stepAfterDrop(state2) {
+    const stepped = moveTick(state2);
+    if (stepped.currentBlock.x !== state2.currentBlock.x) return stepped;
+    return moveTick(stepped);
+  }
   function dropBlock(state2) {
     if (state2.status !== "PLAYING" && state2.status !== "NPC_DEMO") return state2;
     const topPlaced = state2.placedBlocks[state2.placedBlocks.length - 1];
@@ -92,7 +97,7 @@
     const newLevel = computeLevel(dropCount2);
     const nextBlock = { x: intersection.x, width: intersection.width };
     const nextDir = state2.direction === "RIGHT" ? "LEFT" : "RIGHT";
-    return {
+    return stepAfterDrop({
       ...state2,
       placedBlocks: newPlaced,
       currentBlock: nextBlock,
@@ -101,7 +106,7 @@
       level: newLevel,
       lastDropPerfect: perfect,
       tickCount: state2.tickCount + 1
-    };
+    });
   }
 
   // src/ui/renderer.ts

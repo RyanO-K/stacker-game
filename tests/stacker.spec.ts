@@ -149,6 +149,29 @@ test.describe('Drop mechanic', () => {
     expect(after).toBeGreaterThan(before);
   });
 
+  test('a drop leaves the next block off the stack, not flush on it', async ({ page }) => {
+    // A real drop, not forcePerfect() — that helper widens the block to match
+    // the platform, and a grid-wide block has nowhere to step.
+    await page.keyboard.press('Space');
+    const { current, top } = await page.evaluate(() => {
+      const s = (window as any).__test__.getState();
+      return { current: s.currentBlock, top: s.placedBlocks[s.placedBlocks.length - 1] };
+    });
+    // Landing flush would make the very next press a free perfect match.
+    expect(current.x).not.toBe(top.x);
+  });
+
+  test('spamming Space runs the block out of width instead of scoring forever', async ({ page }) => {
+    // The block starts 7 cells wide and each press costs one, so a player
+    // holding the key down runs out of block long before ten presses.
+    for (let i = 0; i < 10; i++) {
+      const status = await page.evaluate(() => (window as any).__test__.getState().status);
+      if (status !== 'PLAYING') break;
+      await page.keyboard.press('Space');
+    }
+    await expect(page.locator('[data-game-status="GAME_OVER"]')).toBeVisible();
+  });
+
   test('block width shrinks when drop is not perfectly aligned', async ({ page }) => {
     const widthBefore = await page.evaluate(() => {
       const s = (window as any).__test__.getState();

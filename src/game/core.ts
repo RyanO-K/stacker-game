@@ -73,7 +73,30 @@ export function moveTick(state: GameState): GameState {
   };
 }
 
-/** Drop the current block onto the stack. Game is infinite — no win condition. */
+/**
+ * Advance the block one cell, taking the step on the far side of a wall bounce.
+ *
+ * A plain tick against a wall only turns the block around — it stays put for
+ * that tick. Harmless on the clock, but wrong right after a drop, where a block
+ * that hasn't moved sits perfectly on what it just landed on. Ticking twice
+ * through a bounce costs every drop the same one cell. A block as wide as the
+ * grid still can't move, but play never produces one: the block starts narrower
+ * than the grid and only ever shrinks.
+ */
+function stepAfterDrop(state: GameState): GameState {
+  const stepped = moveTick(state);
+  if (stepped.currentBlock.x !== state.currentBlock.x) return stepped;
+  return moveTick(stepped);
+}
+
+/**
+ * Drop the current block onto the stack. Game is infinite — no win condition.
+ *
+ * The next block lands one cell off the stack rather than flush on it. Flush
+ * meant a second drop fired immediately was always a perfect match, so holding
+ * the drop key down scored forever without playing; now each press shaves a
+ * cell and a spammed block runs out of width in a few presses.
+ */
 export function dropBlock(state: GameState): GameState {
   if (state.status !== 'PLAYING' && state.status !== 'NPC_DEMO') return state;
 
@@ -92,7 +115,7 @@ export function dropBlock(state: GameState): GameState {
   const nextBlock: Block = { x: intersection.x, width: intersection.width };
   const nextDir    = state.direction === 'RIGHT' ? 'LEFT' : 'RIGHT';
 
-  return {
+  return stepAfterDrop({
     ...state,
     placedBlocks: newPlaced,
     currentBlock: nextBlock,
@@ -101,5 +124,5 @@ export function dropBlock(state: GameState): GameState {
     level: newLevel,
     lastDropPerfect: perfect,
     tickCount: state.tickCount + 1,
-  };
+  });
 }
